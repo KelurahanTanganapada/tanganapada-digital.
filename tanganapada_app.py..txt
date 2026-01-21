@@ -1,0 +1,114 @@
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+import time
+
+# --- KONFIGURASI HALAMAN ---
+st.set_page_config(
+    page_title="Tanganapada Digital - Kota Baubau",
+    page_icon="🏙️",
+    layout="wide"
+)
+
+# --- STYLE CSS KUSTOM ---
+st.markdown("""
+    <style>
+    .main { background-color: #f5f7f9; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #004a99; color: white; }
+    .stMetric { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- SIMULASI DATABASE (Session State) ---
+if 'db_surat' not in st.session_state:
+    st.session_state['db_surat'] = []
+
+# --- SIDEBAR ---
+with st.sidebar:
+    st.image("https://upload.wikimedia.org/wikipedia/commons/b/ba/Logo_Kota_Baubau.png", width=100)
+    st.title("Tanganapada Online")
+    st.write("Kelurahan Tanganapada, Kec. Murhum, Kota Baubau")
+    st.divider()
+    menu = st.radio("Navigasi", ["🏠 Beranda", "📝 Pengajuan Surat", "📊 Cek Status", "👨‍💼 Admin Panel"])
+
+# --- 1. HALAMAN BERANDA ---
+if menu == "🏠 Beranda":
+    st.title("Selamat Datang di Portal Tanganapada")
+    st.subheader("Pelayanan Publik Digital Terpadu")
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Layanan Aktif", "24/7")
+    col2.metric("Total Pengajuan", len(st.session_state['db_surat']))
+    col3.metric("Waktu Proses", "~1 Hari")
+    
+    st.divider()
+    st.write("### Jenis Layanan Tersedia:")
+    st.info("• Surat Keterangan Usaha (SKU)\n\n• Surat Keterangan Tidak Mampu (SKTM)\n\n• Surat Pengantar Nikah (NA)\n\n• Laporan Keluhan Warga")
+
+# --- 2. HALAMAN PENGAJUAN SURAT ---
+elif menu == "📝 Pengajuan Surat":
+    st.title("📝 Form Pengajuan Surat")
+    st.write("Silakan isi data sesuai dengan KTP asli Anda.")
+    
+    with st.container():
+        with st.form("form_surat"):
+            nama = st.text_input("Nama Lengkap")
+            nik = st.text_input("NIK (16 Digit)")
+            no_wa = st.text_input("Nomor WhatsApp (Aktif)")
+            jenis = st.selectbox("Pilih Jenis Surat", ["SKU", "SKTM", "Surat Domisili", "Pengantar Nikah"])
+            alasan = st.text_area("Keperluan / Alasan Pengajuan")
+            berkas = st.file_uploader("Unggah Foto KTP/KK", type=['jpg', 'png', 'pdf'])
+            
+            submit = st.form_submit_button("Kirim Permohonan Sekarang")
+            
+            if submit:
+                if nama and nik and no_wa:
+                    new_data = {
+                        "ID": f"TGP-{len(st.session_state['db_surat'])+101}",
+                        "Tanggal": datetime.now().strftime("%d/%m/%Y"),
+                        "Nama": nama,
+                        "NIK": nik,
+                        "Jenis": jenis,
+                        "WA": no_wa,
+                        "Status": "Sedang Diproses"
+                    }
+                    st.session_state['db_surat'].append(new_data)
+                    st.success("✅ Berhasil! Permohonan Anda telah terkirim ke sistem Kelurahan.")
+                    st.balloons()
+                else:
+                    st.error("❌ Mohon lengkapi data wajib (Nama, NIK, No WA)")
+
+# --- 3. HALAMAN CEK STATUS ---
+elif menu == "📊 Cek Status":
+    st.title("📊 Lacak Status Surat")
+    cari_nik = st.text_input("Masukkan NIK Anda untuk melacak:")
+    if cari_nik:
+        hasil = [s for s in st.session_state['db_surat'] if s['NIK'] == cari_nik]
+        if hasil:
+            for h in hasil:
+                st.write(f"**ID Tiket:** {h['ID']} | **Jenis:** {h['Jenis']} | **Status:** {h['Status']}")
+                st.progress(50 if h['Status'] == "Sedang Diproses" else 100)
+        else:
+            st.warning("Data tidak ditemukan. Pastikan NIK benar.")
+
+# --- 4. ADMIN PANEL (Hanya untuk Staf Kelurahan) ---
+elif menu == "👨‍💼 Admin Panel":
+    st.title("👨‍💼 Dashboard Admin Kelurahan")
+    pwd = st.text_input("Masukkan Password Admin", type="password")
+    
+    if pwd == "tanganapada2026": # Contoh password sederhana
+        st.write("### Daftar Antrean Masuk")
+        if st.session_state['db_surat']:
+            df = pd.DataFrame(st.session_state['db_surat'])
+            st.dataframe(df, use_container_width=True)
+            
+            idx = st.number_input("Update Status Berdasarkan Indeks (0, 1, dst)", step=1)
+            new_status = st.selectbox("Ubah Status", ["Sedang Diproses", "Selesai - Siap Diambil", "Ditolak"])
+            
+            if st.button("Update Status"):
+                st.session_state['db_surat'][int(idx)]['Status'] = new_status
+                st.success(f"Status permohonan ke-{idx} berhasil diubah!")
+        else:
+            st.info("Belum ada permohonan masuk.")
+    elif pwd:
+        st.error("Password Salah!")
